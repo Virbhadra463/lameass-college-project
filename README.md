@@ -15,7 +15,9 @@ Eventify connects people looking to host events (weddings, birthdays, receptions
 | 👤 **Auth System** | Signup/Login for clients and managers with role-based views |
 | 📋 **Manager Profiles** | Detailed profile pages with event types, pricing, descriptions, and images |
 | 📩 **Event Requests** | Clients can send booking proposals to planners with budget, date, and requirements |
-| 📊 **Dashboard** | Personalized dashboard showing active reservations and booking stats |
+| ✅ **Accept / Reject** | Managers can accept or reject incoming requests directly from their dashboard |
+| 💬 **In-App Chat** | Real-time messaging between clients and planners within each booking request (auto-polling) |
+| 📊 **Role-Based Dashboard** | Clients see their bookings + planner info; Managers see incoming requests + client details with action buttons |
 | 🇮🇳 **Indian Focus** | 12 pre-seeded Indian planners across Delhi, Mumbai, Chennai, Pune, Bangalore, Jaipur & more |
 
 ---
@@ -97,7 +99,10 @@ The app will be available at `http://localhost:5173`.
 | `GET` | `/managers` | List all event managers |
 | `GET` | `/managers/match?event_type=Wedding&budget=100000` | Smart match planners by type & budget |
 | `POST` | `/event-requests?client_id={id}` | Submit a booking request to a planner |
-| `GET` | `/event-requests?user_id={id}&role={role}` | Get requests for a user |
+| `GET` | `/event-requests?user_id={id}&role={role}` | Get requests for a user (role-aware) |
+| `PATCH` | `/event-requests/{id}?status=Accepted` | Accept or reject a booking request |
+| `POST` | `/messages` | Send a chat message within a booking conversation |
+| `GET` | `/messages?event_request_id={id}` | Get all messages for a conversation |
 
 ---
 
@@ -106,8 +111,8 @@ The app will be available at `http://localhost:5173`.
 ```
 em/
 ├── backend/
-│   ├── main.py                  # FastAPI app & all endpoints
-│   ├── models.py                # SQLAlchemy models (User, ManagerProfile, EventRequest)
+│   ├── main.py                  # FastAPI app & all endpoints (9 routes)
+│   ├── models.py                # SQLAlchemy models (User, ManagerProfile, EventRequest, Message)
 │   ├── schemas.py               # Pydantic request/response schemas
 │   ├── database.py              # DB engine, session, Base
 │   ├── seed.py                  # Original seed script
@@ -120,13 +125,14 @@ em/
 │   │   ├── components/
 │   │   │   ├── Navbar.jsx           # Sticky nav with auth-aware links
 │   │   │   ├── ManagerCard.jsx      # Planner card for the grid
-│   │   │   ├── FindPlannerModal.jsx # Smart match popup modal
+│   │   │   ├── FindPlannerModal.jsx  # Smart match popup modal
+│   │   │   ├── ChatWindow.jsx       # In-app chat modal (polling-based)
 │   │   │   └── EventCard.jsx        # Event display card
 │   │   ├── pages/
 │   │   │   ├── Home.jsx             # Full landing page with intro sections
 │   │   │   ├── Login.jsx            # Login form
 │   │   │   ├── Signup.jsx           # Registration (client/manager)
-│   │   │   ├── Dashboard.jsx        # User dashboard
+│   │   │   ├── Dashboard.jsx        # Role-based dashboard (client/manager views)
 │   │   │   ├── ManagerDetails.jsx   # Individual planner profile
 │   │   │   ├── RequestForm.jsx      # Booking request form
 │   │   │   ├── BookingForm.jsx      # Event booking form

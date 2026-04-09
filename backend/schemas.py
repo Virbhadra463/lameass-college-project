@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
+from datetime import datetime
 
 class ManagerProfileBase(BaseModel):
     business_name: str
@@ -35,6 +36,17 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# Minimal user info embedded in event request responses
+class UserBrief(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    role: str
+    manager_profile: Optional[ManagerProfileResponse] = None
+
+    class Config:
+        from_attributes = True
+
 class EventRequestCreate(BaseModel):
     manager_id: int
     event_type: str
@@ -51,6 +63,26 @@ class EventRequestResponse(BaseModel):
     budget: float
     special_requirements: Optional[str] = None
     status: str
+    client: Optional[UserBrief] = None
+    manager: Optional[UserBrief] = None
+
+    class Config:
+        from_attributes = True
+
+# ── Chat Messages ──
+
+class MessageCreate(BaseModel):
+    event_request_id: int
+    sender_id: int
+    content: str
+
+class MessageResponse(BaseModel):
+    id: int
+    event_request_id: int
+    sender_id: int
+    content: str
+    timestamp: datetime
+    sender: Optional[UserBrief] = None
 
     class Config:
         from_attributes = True

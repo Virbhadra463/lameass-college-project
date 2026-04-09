@@ -101,3 +101,47 @@ def get_requests(user_id: int, role: str, db: Session = Depends(database.get_db)
         return db.query(models.EventRequest).filter(models.EventRequest.client_id == user_id).all()
     else:
         return db.query(models.EventRequest).filter(models.EventRequest.manager_id == user_id).all()
+
+@app.patch("/event-requests/{request_id}", response_model=schemas.EventRequestResponse)
+def update_request_status(request_id: int, status: str = Query(...), db: Session = Depends(database.get_db)):
+    """Update an event request's status (Accept/Reject)."""
+    req = db.query(models.EventRequest).filter(models.EventRequest.id == request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if status not in ["Accepted", "Rejected", "Pending"]:
+        raise HTTPException(status_code=400, detail="Invalid status")
+    req.status = status
+    db.commit()
+    db.refresh(req)
+    return req
+
+# ── Chat Messages ──
+
+@app.post("/messages", response_model=schemas.MessageResponse)
+def send_message(msg: schemas.MessageCreate, db: Session = Depends(database.get_db)):
+    """Send a chat message within an event request conversation."""
+    # Verify the event request exists
+    req = db.query(models.EventRequest).filter(models.EventRequest.id == msg.event_request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Event request not found")
+    # Verify sender is part of this conversation
+    if msg.sender_id not in [req.client_id, req.manager_id]:
+        raise HTTPException(status_code=403, detail="Not authorized for this conversation")
+    
+    new_msg = models.Message(
+        event_request_id=msg.event_request_id,
+        sender_id=msg.sender_id,
+        content=msg.content
+    )
+    db.add(new_msg)
+    db.commit()
+    db.refresh(new_msg)
+    return new_msg
+
+@app.get("/messages", response_model=List[schemas.MessageResponse])
+def get_messages(event_request_id: int, db: Session = Depends(database.get_db)):
+    """Get all messages for a specific event request conversation."""
+    messages = db.query(models.Message).filter(
+        models.Message.event_request_id == event_request_id
+    ).order_by(models.Message.timestamp.asc()).all()
+    return messages

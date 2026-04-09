@@ -15,8 +15,9 @@ Eventify is a **full-stack web application** with a decoupled frontend and backe
 │   React 19 + Vite 8 + TailwindCSS 4                        │
 │   ┌──────────┐  ┌────────────┐  ┌─────────────────────┐    │
 │   │  Router   │  │   Pages    │  │    Components       │    │
-│   │ (7 routes)│  │ (8 pages)  │  │ (Navbar, Cards,     │    │
-│   │          │  │            │  │  FindPlannerModal)   │    │
+│   │ (8 routes)│  │ (8 pages)  │  │ (Navbar, Cards,     │    │
+│   │          │  │            │  │  FindPlannerModal,   │    │
+│   │          │  │            │  │  ChatWindow)         │    │
 │   └──────────┘  └────────────┘  └─────────────────────┘    │
 │         │              │                   │                │
 │         └──────────────┼───────────────────┘                │
@@ -34,7 +35,7 @@ Eventify is a **full-stack web application** with a decoupled frontend and backe
 │   ┌──────────┐  ┌────────────┐  ┌─────────────────────┐    │
 │   │  Routes   │  │  Schemas   │  │     Models          │    │
 │   │ (main.py) │  │(schemas.py)│  │   (models.py)       │    │
-│   │  6 endpoints│ │ Pydantic  │  │   SQLAlchemy ORM    │    │
+│   │  9 endpoints│ │ Pydantic  │  │   SQLAlchemy ORM    │    │
 │   └──────────┘  └────────────┘  └─────────────────────┘    │
 │                        │                                    │
 │                   SQLAlchemy                                │
@@ -82,7 +83,13 @@ App.jsx (Router + Layout)
 │
 ├── Login.jsx                     ← Email + password login
 ├── Signup.jsx                    ← Registration with role selection
-├── Dashboard.jsx                 ← User's booking overview
+├── Dashboard.jsx                 ← Role-based dashboard
+│   ├── Client View               ← Booking requests + planner info + chat
+│   ├── Manager View              ← Incoming requests + Accept/Reject + chat
+│   └── ChatWindow.jsx            ← In-app messaging modal
+│       ├── Message Bubbles        ← Left/right aligned by sender
+│       ├── Auto-polling (3s)      ← Fetches new messages
+│       └── Input Bar              ← Send message form
 ├── ManagerDetails.jsx            ← Full planner profile page
 ├── RequestForm.jsx               ← Send booking proposal
 ├── BookingForm.jsx               ← Reserve an event slot
@@ -139,7 +146,10 @@ POST /login                               → Authenticate & return user object
 GET  /managers                            → List all managers
 GET  /managers/match?event_type=&budget=  → Smart match (filter + sort)
 POST /event-requests?client_id=           → Submit booking request
-GET  /event-requests?user_id=&role=       → Get user's requests
+GET  /event-requests?user_id=&role=       → Get user's requests (role-aware)
+PATCH /event-requests/{id}?status=        → Accept / Reject a request
+POST /messages                            → Send a chat message
+GET  /messages?event_request_id=          → Get conversation messages
 ```
 
 ### 3.3 Smart Match Algorithm
@@ -211,6 +221,17 @@ Input: event_type (string), budget (float)
 │ special_requirements   │
 │ status            (str)│
 │  └─ "Pending"|"Accepted"|"Rejected"
+└──────────┬───────────┘
+           │ 1:N
+           ▼
+┌──────────────────────┐
+│      Message         │
+├──────────────────────┤
+│ id                (PK)│
+│ event_request_id (FK) │
+│ sender_id    (FK→User)│
+│ content         (str) │
+│ timestamp  (datetime) │
 └──────────────────────┘
 ```
 
@@ -218,6 +239,8 @@ Input: event_type (string), budget (float)
 
 - **User ↔ ManagerProfile**: One-to-one. Only users with `role="manager"` have a profile.
 - **User ↔ EventRequest**: One-to-many. A client can send multiple requests. A manager can receive multiple requests.
+- **EventRequest ↔ Message**: One-to-many. Each booking conversation can have multiple chat messages.
+- **Message → User**: Each message has a sender (either the client or manager in that conversation).
 - **event_types field**: Stored as a comma-separated string (e.g., `"Wedding, Reception"`). Parsed at query time for filtering.
 
 ---
@@ -292,6 +315,44 @@ Axios POST /event-requests?client_id=5
 Success screen → auto-redirect to Dashboard
 ```
 
+### 6.3 Chat Flow (Client ↔ Manager)
+
+```
+User opens Dashboard → clicks "Chat" on a request card
+        │
+        ▼
+ChatWindow modal opens
+        │
+        ├── GET /messages?event_request_id=3  (initial fetch)
+        │
+        ├── Poll every 3 seconds for new messages
+        │
+        ▼
+User types message → clicks Send
+        │
+Axios POST /messages
+  Body: { event_request_id, sender_id, content }
+        │
+        ▼
+New message appended → auto-scrolls to bottom
+        │
+Other user sees it on next poll (≤3 seconds)
+```
+
+### 6.4 Accept/Reject Flow (Manager)
+
+```
+Manager opens Dashboard → sees incoming request with status "Pending"
+        │
+        ▼ clicks "Accept" or "Reject"
+        │
+Axios PATCH /event-requests/7?status=Accepted
+        │
+        ▼
+Status badge updates instantly in UI
+Client sees updated status on their Dashboard
+```
+
 ---
 
 ## 7. Security Considerations
@@ -314,9 +375,14 @@ Success screen → auto-redirect to Dashboard
 - [ ] **Password hashing** (bcrypt)
 - [ ] **Image uploads** for manager profiles (S3/Cloudinary)
 - [ ] **Reviews & ratings** system for planners
-- [ ] **Real-time chat** between clients and planners (WebSocket)
+- [x] ~~**Real-time chat** between clients and planners~~ ✅ Implemented (polling-based)
+- [x] ~~**Accept/Reject requests**~~ ✅ Implemented
+- [x] ~~**Role-based dashboard**~~ ✅ Implemented
 - [ ] **Payment integration** (Razorpay/Stripe)
 - [ ] **Email notifications** for booking status changes
 - [ ] **PostgreSQL** migration for production
 - [ ] **Docker Compose** for one-command deployment
 - [ ] **Admin panel** for managing planners and requests
+- [ ] **WebSocket upgrade** for true real-time chat (replace polling)
+- [ ] **Search & filter bar** on homepage (by type, budget, city)
+- [ ] **Notification bell** for new messages and status updates
